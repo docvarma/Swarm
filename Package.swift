@@ -23,16 +23,6 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.13.2"),
     // Production graph must resolve to the published tag set that is known to build together.
     .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.22"),
-    .package(
-        url: "https://github.com/christopherkarani/Conduit",
-        exact: "0.3.13",
-        traits: [
-            .trait(name: "OpenAI"),
-            .trait(name: "OpenRouter"),
-            .trait(name: "Anthropic"),
-            .trait(name: "MLX"),
-        ]
-    ),
     .package(url: "https://github.com/christopherkarani/ContextCore.git", exact: "1.0.0"),
     .package(url: "https://github.com/christopherkarani/Membrane", exact: "0.1.3"),
     .package(url: "https://github.com/christopherkarani/Hive", exact: "0.1.9"),
@@ -43,8 +33,6 @@ var swarmDependencies: [Target.Dependency] = [
     .product(name: "Logging", package: "swift-log"),
     .product(name: "SwiftSoup", package: "SwiftSoup"),
     .product(name: "Wax", package: "Wax"),
-    .product(name: "Conduit", package: "Conduit"),
-    .product(name: "ConduitAdvanced", package: "Conduit"),
     .product(name: "ContextCore", package: "ContextCore"),
     .product(name: "HiveCore", package: "Hive"),
     .product(name: "Membrane", package: "Membrane"),
@@ -76,6 +64,9 @@ var packageTargets: [Target] = [
     .target(
         name: "Swarm",
         dependencies: swarmDependencies,
+        exclude: [
+            "Providers/Conduit"
+        ],
         swiftSettings: swarmSwiftSettings
     ),
     .target(
@@ -119,8 +110,6 @@ var packageTargets: [Target] = [
             let dependencies: [Target.Dependency] = [
                 "Swarm",
                 "SwarmMCP",
-                .product(name: "Conduit", package: "Conduit"),
-                .product(name: "ConduitAdvanced", package: "Conduit"),
                 .product(name: "Membrane", package: "Membrane"),
                 .product(name: "MembraneCore", package: "Membrane"),
             ]
