@@ -3,16 +3,20 @@ import PackageDescription
 import CompilerPluginSupport
 import Foundation
 let includeDemo = ProcessInfo.processInfo.environment["SWARM_INCLUDE_DEMO"] == "1"
-let coreOnly = ProcessInfo.processInfo.environment["SWARM_CORE_ONLY"] == "1"
+let includeIntegrations = ProcessInfo.processInfo.environment["SWARM_INCLUDE_INTEGRATIONS"] == "1"
+let coreOnly = !includeIntegrations
 
 var packageProducts: [Product] = [
     .library(name: "Swarm", targets: ["Swarm"]),
-    .library(name: "SwarmOpenTelemetry", targets: ["SwarmOpenTelemetry"]),
-    .library(name: "SwarmMembrane", targets: ["SwarmMembrane"]),
-    .library(name: "SwarmMCP", targets: ["SwarmMCP"]),
 ]
 
-if includeDemo {
+if includeIntegrations {
+    packageProducts.append(.library(name: "SwarmOpenTelemetry", targets: ["SwarmOpenTelemetry"]))
+    packageProducts.append(.library(name: "SwarmMembrane", targets: ["SwarmMembrane"]))
+    packageProducts.append(.library(name: "SwarmMCP", targets: ["SwarmMCP"]))
+}
+
+if includeDemo, includeIntegrations {
     packageProducts.append(.executable(name: "SwarmDemo", targets: ["SwarmDemo"]))
     packageProducts.append(.executable(name: "SwarmMCPServerDemo", targets: ["SwarmMCPServerDemo"]))
 }
@@ -33,16 +37,15 @@ var packageDependencies: [Package.Dependency] = [
     // the latest compatible release line used by Swarm and Membrane.
     .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"603.0.0"),
     .package(url: "https://github.com/apple/swift-log.git", from: "1.12.0"),
-    .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
-    .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", from: "2.4.1"),
     .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.13.5"),
 ]
 
 let integrationTrait = "Integrations"
-if !coreOnly {
+if includeIntegrations {
     packageDependencies += [
-        // Production graph must resolve to the published tag set that is known to build together.
-        .package(url: "https://github.com/christopherkarani/Wax.git", exact: "0.1.23"),
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
+        .package(url: "https://github.com/open-telemetry/opentelemetry-swift-core.git", from: "2.4.1"),
+        .package(url: "https://github.com/docvarma/Wax.git", revision: "9400e49b2da34cf04e27aea608fd345b6d8c4952"),
         .package(
             url: "https://github.com/christopherkarani/Conduit",
             exact: "0.3.17",
@@ -54,7 +57,7 @@ if !coreOnly {
             ]
         ),
         .package(url: "https://github.com/christopherkarani/ContextCore.git", exact: "1.0.0"),
-        .package(url: "https://github.com/christopherkarani/Membrane", exact: "0.1.4"),
+        .package(url: "https://github.com/christopherkarani/Membrane", revision: "11bef8184d8c7254c5e3d87dd2117e2932642d73"),
         .package(url: "https://github.com/christopherkarani/Hive", exact: "0.2.1"),
     ]
 }
@@ -88,9 +91,11 @@ let swarmCoreOnlyExcludes = [
     "Integration/Membrane/SessionMembraneAgentAdapter.swift",
     "Integration/Membrane/WaxMembraneStorage.swift",
     "Internal/GraphRuntime",
+    "MCP",
     "Memory/ContextCoreMemory.swift",
     "Memory/DefaultAgentMemory.swift",
     "Providers/Conduit",
+    "Providers/MultiProvider.swift",
     "Tools/Web",
     "Workflow/WorkflowCheckpointCodec.swift",
     "Workflow/WorkflowCheckpointStore.swift",
@@ -119,66 +124,11 @@ var packageTargets: [Target] = [
         exclude: coreOnly ? swarmCoreOnlyExcludes : [],
         swiftSettings: swarmSwiftSettings
     ),
-    .target(
-        name: "SwarmOpenTelemetry",
-        dependencies: [
-            "Swarm",
-            .product(name: "OpenTelemetryApi", package: "opentelemetry-swift-core"),
-        ],
-        swiftSettings: swarmSwiftSettings
-    ),
-    .target(
-        name: "SwarmMembrane",
-        dependencies: [
-            "Swarm",
-        ],
-        path: "Sources/SwarmMembrane",
-        swiftSettings: swarmSwiftSettings
-    ),
-    .target(
-        name: "SwarmMCP",
-        dependencies: [
-            "Swarm",
-            .product(name: "MCP", package: "swift-sdk"),
-        ],
-        swiftSettings: swarmSwiftSettings
-    ),
-    .target(
-        name: "SwarmCapabilityShowcaseSupport",
-        dependencies: [
-            "Swarm",
-            "SwarmMCP",
-        ],
-        swiftSettings: swarmSwiftSettings
-    ),
-    .executableTarget(
-        name: "SwarmCapabilityShowcase",
-        dependencies: [
-            "SwarmCapabilityShowcaseSupport",
-        ],
-        swiftSettings: [
-            .enableExperimentalFeature("StrictConcurrency")
-        ]
-    ),
 
     // MARK: - Tests
     .testTarget(
         name: "SwarmTests",
-        dependencies: {
-            var dependencies: [Target.Dependency] = [
-                "Swarm",
-                "SwarmMCP",
-            ]
-            if !coreOnly {
-                dependencies += [
-                    .product(name: "Conduit", package: "Conduit"),
-
-                    .product(name: "Membrane", package: "Membrane"),
-                    .product(name: "MembraneCore", package: "Membrane"),
-                ]
-            }
-            return dependencies
-        }(),
+        dependencies: ["Swarm"],
         resources: [],
         swiftSettings: swarmSwiftSettings
     ),
@@ -192,29 +142,52 @@ var packageTargets: [Target] = [
         swiftSettings: [
             .enableExperimentalFeature("StrictConcurrency")
         ]
-    ),
-    .testTarget(
-        name: "SwarmCapabilityShowcaseTests",
-        dependencies: [
-            "SwarmCapabilityShowcaseSupport",
-        ],
-        swiftSettings: [
-            .enableExperimentalFeature("StrictConcurrency")
-        ]
-    ),
-    .testTarget(
-        name: "SwarmOpenTelemetryTests",
-        dependencies: [
-            "Swarm",
-            "SwarmOpenTelemetry",
-            .product(name: "OpenTelemetrySdk", package: "opentelemetry-swift-core"),
-        ],
-        swiftSettings: swarmSwiftSettings
     )
 ]
 
-if !coreOnly {
-    packageTargets.append(
+if includeIntegrations {
+    packageTargets.append(contentsOf: [
+        .target(
+            name: "SwarmOpenTelemetry",
+            dependencies: [
+                "Swarm",
+                .product(name: "OpenTelemetryApi", package: "opentelemetry-swift-core"),
+            ],
+            swiftSettings: swarmSwiftSettings
+        ),
+        .target(
+            name: "SwarmMembrane",
+            dependencies: [
+                "Swarm",
+            ],
+            path: "Sources/SwarmMembrane",
+            swiftSettings: swarmSwiftSettings
+        ),
+        .target(
+            name: "SwarmMCP",
+            dependencies: [
+                "Swarm",
+                .product(name: "MCP", package: "swift-sdk"),
+            ],
+            swiftSettings: swarmSwiftSettings
+        ),
+        .target(
+            name: "SwarmCapabilityShowcaseSupport",
+            dependencies: [
+                "Swarm",
+                "SwarmMCP",
+            ],
+            swiftSettings: swarmSwiftSettings
+        ),
+        .executableTarget(
+            name: "SwarmCapabilityShowcase",
+            dependencies: [
+                "SwarmCapabilityShowcaseSupport",
+            ],
+            swiftSettings: [
+                .enableExperimentalFeature("StrictConcurrency")
+            ]
+        ),
         .testTarget(
             name: "HiveSwarmTests",
             dependencies: [
@@ -222,11 +195,29 @@ if !coreOnly {
                 .product(name: "HiveCore", package: "Hive")
             ],
             swiftSettings: swarmSwiftSettings
+        ),
+        .testTarget(
+            name: "SwarmCapabilityShowcaseTests",
+            dependencies: [
+                "SwarmCapabilityShowcaseSupport",
+            ],
+            swiftSettings: [
+                .enableExperimentalFeature("StrictConcurrency")
+            ]
+        ),
+        .testTarget(
+            name: "SwarmOpenTelemetryTests",
+            dependencies: [
+                "Swarm",
+                "SwarmOpenTelemetry",
+                .product(name: "OpenTelemetrySdk", package: "opentelemetry-swift-core"),
+            ],
+            swiftSettings: swarmSwiftSettings
         )
-    )
+    ])
 }
 
-if includeDemo {
+if includeDemo, includeIntegrations {
     packageTargets.append(
         .executableTarget(
             name: "SwarmDemo",
@@ -260,7 +251,6 @@ let package = Package(
     ],
     products: packageProducts,
     traits: [
-        .default(enabledTraits: [integrationTrait]),
         .trait(
             name: integrationTrait,
             description: "Enable provider, memory, graph runtime, Wax, Membrane, ContextCore, Conduit, and Hive integrations."
