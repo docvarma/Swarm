@@ -49,7 +49,10 @@ import Foundation
             return content
         }
 
-        public func stream(prompt: String, options _: InferenceOptions) -> AsyncThrowingStream<String, Error> {
+        // `Error` must be qualified here: the macOS 27 SDK adds a nested
+        // `LanguageModelSession.Error`, which member lookup would otherwise
+        // resolve instead of the global `Swift.Error` the protocol requires.
+        public func stream(prompt: String, options _: InferenceOptions) -> AsyncThrowingStream<String, any Swift.Error> {
             StreamHelper.makeTrackedStream { continuation in
                 do {
                     // For streaming, we'll generate the full response and yield it.
